@@ -1,3 +1,4 @@
+
 #include <net/tcp.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -14,18 +15,20 @@
 #define HASHSIZE 20
 #define RWND_MAX 30000000
 
-/*timer for recalculating in nanoseconds*/
+/* timer for recalculating in nanoseconds */
 uint64_t time = 40000000;
 uint32_t timer_rwnd = 0;//200000000;
 uint32_t change = 0;
-/*admin's speed*/
+
+/* admin's speed */
 uint32_t default_speed = 1000000;//b/sec
 int addition_value = 200000;
-/*needed structures*/
-static struct nf_hook_ops nfho;   //net filter hook option struct
+/* needed structures */
+
+static struct nf_hook_ops nfho;//net filter hook option struct
 struct sk_buff *sock_buff;
-struct tcphdr *tcp_header;          //udp header struct (not used)
-struct iphdr *ip_header;            //ip header struct
+struct tcphdr *tcp_header;//udp header struct (not used)
+struct iphdr *ip_header;//ip header struct
 
 typedef struct{
 	uint32_t time_rwnd;
@@ -66,8 +69,8 @@ typedef struct{
 
 DEFINE_HASHTABLE(storage, HASHSIZE);
 
-/*calculate cwnd in bytes*/
 void calculate_cwnd(uint32_t ack_seq, connection* found) {	
+	/* calculate cwnd in bytes */
 	uint64_t ack_diff = (ack_seq - found->bytes);
 	found->bytes = ack_seq;
 	uint64_t cwindow = found->cwnd;
@@ -77,7 +80,7 @@ void calculate_cwnd(uint32_t ack_seq, connection* found) {
 }
 
 void calculate_rwnd(connection * found, uint32_t window){
-	/*calculate rwnd*/
+	/* calculate rwnd */
 	uint64_t be = found->sbe;//in b/sec
 	printk(KERN_INFO "wind=%d", window);
 	if(be > found->speed){
@@ -108,7 +111,6 @@ void calculate_rwnd(connection * found, uint32_t window){
 
 		uint64_t rwnd = found->cwnd * new_speed; // rwnd = cwnd * N
 
-		
 		//rwnd = (rwnd > RWND_MAX)?RWND_MAX:rwnd;
 		if(rwnd  > 1000)
 			do_div(rwnd, 1000);
@@ -125,7 +127,7 @@ void calculate_sbe(connection* found, uint64_t bytes_diff, uint64_t time_diff){
 		do_div(time_diff, 1000000);
 	}
 	else time_diff = 1;
-	/*bandwidth estimate in b/nsec*/
+	/* bandwidth estimate in b/nsec */
 	do_div(bytes_diff, time_diff);
 	printk(KERN_INFO "current_be=%lld\n", bytes_diff);
 	
@@ -143,14 +145,14 @@ void calculate_sbe(connection* found, uint64_t bytes_diff, uint64_t time_diff){
 }
 
 int hash_key(uint16_t dest_port, uint16_t source_port, unsigned int dest_ip, unsigned int source_ip){
-	/*STRANGE CONVERT*/
+	/* STRANGE CONVERT */
 	char a[12];
 	char* b = &a[0];
 	int* c = (int*)b;
 	c[0] = dest_port; c[1] = source_port;
 	short* d = (short*)(b + 8);
 	d[0] = dest_ip;	d[1] = source_ip;
-	/*END*/
+	/* END */
 	int key = jhash(b,12,0);
 	return key;
 }
@@ -179,31 +181,32 @@ unsigned int inet_addr(char *str){
 }
 
 unsigned int hook_func(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *)) {
- 	if(skb_is_nonlinear(skb))
+	if(skb_is_nonlinear(skb))
 		skb_linearize(skb);
-        sock_buff = skb;
- 
-        ip_header = (struct iphdr *)skb_network_header(sock_buff);    //grab network header using accessor
-       
-        if(!sock_buff) { 
-		return NF_ACCEPT;
-	}
+		sock_buff = skb;
 
-        if (ip_header->protocol == IPPROTO_TCP) {
-                tcp_header = (struct tcphdr *)skb_transport_header(sock_buff);  //grab transport header
+		ip_header = (struct iphdr *)skb_network_header(sock_buff);    //grab network header using accessor
+
+		if(!sock_buff) { 
+			return NF_ACCEPT;
+		}
+
+		if (ip_header->protocol == IPPROTO_TCP) {
+			tcp_header = (struct tcphdr *)skb_transport_header(sock_buff);  //grab transport header
 		if(tcp_header->ack == 1 && tcp_header->syn != 1){
-			/*ack packet from client*/
+			/* ack packet from client */
 			connection* found = find_in_hash(tcp_header->dest, 
 				tcp_header->source, 
 				ip_header->daddr,
 				ip_header->saddr);
-			if(found != NULL && found->flag > 0){
-				/*calculate cwnd*/
-				calculate_cwnd(ntohl(tcp_header->ack_seq), found);
-				//if(found->rwnd)
-				//	found->cwnd = found->rwnd;
 
-				/*change rwnd in ACK packet*/
+			if(found != NULL && found->flag > 0){
+				/* calculate cwnd */
+				calculate_cwnd(ntohl(tcp_header->ack_seq), found);
+				// if(found->rwnd)
+				// found->cwnd = found->rwnd;
+
+				/* change rwnd in ACK packet */
 				uint64_t rwnd_to_packet = found->rwnd ;//32
 				do_div(rwnd_to_packet, found->wnd_scale);
 				uint32_t rwnd_new = rwnd_to_packet;
@@ -253,27 +256,30 @@ unsigned int hook_func(unsigned int hooknum, struct sk_buff *skb, const struct n
 				found->last_ack = found->bytes = ntohl(tcp_header->ack_seq) - 100;	
 				found->flag = 1;
 			}
-		}/*end*/
+		}
+		/* end */
 		
 		if(tcp_header->syn == 1 && tcp_header->ack != 1){
+
 			connection* found = find_in_hash(tcp_header->dest, 
 				tcp_header->source, 
 				ip_header->daddr,
 				ip_header->saddr);
+
 			if(found == NULL){
 				connection* f = kmalloc(sizeof(connection), GFP_KERNEL);
-				/*store all connections in hashtable*/			
+				/* store all connections in hashtable */			
 				f->dest_port = tcp_header->dest;
 				f->source_port = tcp_header->source;
 				f->dest_ip = ip_header->daddr;
 				f->source_ip = ip_header->saddr;
-				/*Initialize*/
+				/* Initialize */
 				f->flag = 0;
 				f->timer = f->last_time = f->bytes = f->sbe = f->last_ack = f->rwnd = f->cwnd = 0;
 				
 				f->speed = default_speed + addition_value;
 		
-				/*calculate hash key to store in hashtable*/
+				/* calculate hash key to store in hashtable */
 				int key = hash_key(f->dest_port, f->source_port, 
 					f->dest_ip, f->source_ip);
 
@@ -281,17 +287,19 @@ unsigned int hook_func(unsigned int hooknum, struct sk_buff *skb, const struct n
 				if (tcp_header->doff > 5) {
 					unsigned char* opt = tmp + sizeof(struct tcphdr);
 				 	while( *opt != 0 ) {
-						tcp_option_t* _opt = (tcp_option_t*)opt;
+						tcp_option_t* _opt = (tcp_option_t *)opt;
 						if( _opt->kind == 1 ) { //NOP
-								++opt;  // NOP is one byte;
-								continue;
+							++opt;  // NOP is one byte;
+							continue;
 						}
-						if( _opt->kind == 2 ) { //MSS
-							unsigned int* mss_opt = (unsigned int*)(opt + sizeof(tcp_option_t));
+						if( _opt->kind == 2 ) {
+							/* MSS */
+							unsigned int* mss_opt = (unsigned int *)(opt + sizeof(tcp_option_t));
 							unsigned int mss = htons(*mss_opt);
 							f->mss = mss;
 						}
-						if( _opt->kind == 3 ) { //wnd_scale
+						if( _opt->kind == 3 ) {
+							/* wnd_scale> */
 							integer24* wnd_opt = (integer24*)(opt + sizeof(tcp_option_t));
 							integer24 wnd_scale = *wnd_opt;
 							f->wnd_scale = wnd_scale.data;
@@ -305,17 +313,17 @@ unsigned int hook_func(unsigned int hooknum, struct sk_buff *skb, const struct n
 						}		
 					}
 				}
-				/*add to hashtable*/			
+				/* add to hashtable */			
 				hash_add(storage, &f->my_list, key);
 			}
 		}
-                return NF_ACCEPT;
-        }               
-        return NF_ACCEPT;
+			return NF_ACCEPT;
+	}
+	return NF_ACCEPT;
 }
- 
+
 int init_module(void) {
-	pr_info("Starting module...\n");		
+	pr_info("Starting module...\n");
 	hash_init(storage);
 	nfho.hook = hook_func;
 	nfho.hooknum = NF_INET_FORWARD;
@@ -324,10 +332,10 @@ int init_module(void) {
 	nf_register_hook(&nfho);
 	return 0;
 }
- 
+
 void cleanup_module(void){
 	pr_info("Cleaning up...\n");
-	nf_unregister_hook(&nfho);     
+	nf_unregister_hook(&nfho);
 }
 
 MODULE_AUTHOR("Bobrov Kirill");
