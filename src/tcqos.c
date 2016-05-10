@@ -1,16 +1,16 @@
 
 #include <net/tcp.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/netfilter.h>
-#include <linux/netfilter_ipv4.h>
-#include <linux/skbuff.h>
-#include <linux/tcp.h>
 #include <linux/ip.h>
-#include <linux/hashtable.h>
-#include <linux/jhash.h>
+#include <linux/tcp.h>
 #include <linux/time.h>
 #include <linux/inet.h>
+#include <linux/jhash.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/skbuff.h>
+#include <linux/netfilter.h>
+#include <linux/hashtable.h>
+#include <linux/netfilter_ipv4.h>
 
 #define HASHSIZE 20
 #define RWND_MAX 30000000
